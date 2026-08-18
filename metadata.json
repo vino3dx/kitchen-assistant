@@ -1,0 +1,6 @@
+{
+  "name": "家庭厨房菜谱助手",
+  "description": "基于 Next.js 与 Supabase 的家庭菜谱管理应用",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
