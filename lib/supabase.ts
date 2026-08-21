@@ -1,20 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
-import { store } from "./store";
 
-// Use provided Supabase credentials or environment variables
-const supabaseUrl =
-  process.env.SUPABASE_URL || "https://qqcpgqsmbubrkswjpbnw.supabase.co";
-const supabaseKey =
-  process.env.SUPABASE_KEY ||
-  "sb_publishable_TyEyMTnR0YKsUKoKRGYUzA_wQtKJayK";
 
-export const isSupabaseConfigured = Boolean(
-  supabaseUrl && supabaseKey && supabaseUrl.startsWith("http")
+// Supabase 配置
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+
+// 创建 Supabase Client
+export const supabaseClient = createClient(
+  supabaseUrl,
+  supabaseAnonKey
 );
-
-export const supabaseClient = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
-
-// Export kitchen data store helper
-export { store };
