@@ -31,12 +31,19 @@ export interface Recipe {
 /** orders 表对应的业务类型。 */
 export interface Order {
   id: string;
+  family_id: string;
   recipe_id: string;
   recipe_name?: string;
   user_name: string;
   servings?: number;
   created_at?: string;
   recipe?: Recipe;
+}
+
+export interface Family {
+  id: string;
+  family_code: string;
+  created_at?: string;
 }
 
 /** shopping 表中的原始采购记录（兼容项目当前表名）。 */
@@ -69,4 +76,4 @@ export interface ExtraShoppingItem extends ShoppingItem {
 }
 
 export type RecipeInsert = Omit<Recipe, "id" | "created_at"> & { id?: string; created_at?: string };
-export type OrderInsert = Pick<Order, "recipe_id" | "user_name"> & Partial<Pick<Order, "servings">>;
+export type OrderInsert = Pick<Order, "family_id" | "recipe_id" | "user_name"> & Partial<Pick<Order, "servings">>;

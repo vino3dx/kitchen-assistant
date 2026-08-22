@@ -7,6 +7,7 @@ import {
   deleteOrder as deleteOrderApi,
   fetchOrders,
 } from "@/lib/kitchen/orders";
+import { getStoredFamily } from "@/lib/kitchen/family";
 import { supabaseClient } from "@/lib/supabase";
 import type { Order, OrderInsert } from "@/lib/kitchen/types";
 
@@ -20,14 +21,26 @@ export function useOrders() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const isMountedRef = useRef(true);
+  const initialFamily = getStoredFamily();
+  const familyStateRef = useRef<{ familyId: string | null; familyCode: string | null }>(initialFamily);
+  const [familySnapshot, setFamilySnapshot] = useState(initialFamily);
 
   /** 从 API 刷新订单，组件已卸载时不再写入 React 状态。 */
   const refreshOrders = useCallback(async () => {
+    const { familyId } = familyStateRef.current;
+    if (!familyId) {
+      if (isMountedRef.current) {
+        setOrders([]);
+        setIsLoading(false);
+      }
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const nextOrders = await fetchOrders();
+      const nextOrders = await fetchOrders(familyId);
       if (isMountedRef.current) setOrders(nextOrders);
     } catch (caughtError) {
       if (isMountedRef.current) {
@@ -43,27 +56,48 @@ export function useOrders() {
     // 推迟首屏请求，避免在 Effect 同步阶段触发状态更新。
     void Promise.resolve().then(refreshOrders);
 
-    const channel = supabaseClient
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => void refreshOrders(),
-      )
-      .subscribe();
+    const { familyId } = familySnapshot;
+    const channel = familyId
+      ? supabaseClient
+          .channel("orders-realtime")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "orders", filter: `family_id=eq.${familyId}` },
+            () => void refreshOrders(),
+          )
+          .subscribe()
+      : null;
 
     return () => {
       isMountedRef.current = false;
       // 显式移除频道，防止路由切换或开发模式重复挂载后残留订阅。
-      void supabaseClient.removeChannel(channel);
+      if (channel) void supabaseClient.removeChannel(channel);
+    };
+  }, [familySnapshot, refreshOrders]);
+
+  useEffect(() => {
+    const syncFamily = () => {
+      familyStateRef.current = getStoredFamily();
+      setFamilySnapshot(familyStateRef.current);
+      void refreshOrders();
+    };
+
+    syncFamily();
+    window.addEventListener("storage", syncFamily);
+    window.addEventListener("kitchen-family-change", syncFamily);
+    return () => {
+      window.removeEventListener("storage", syncFamily);
+      window.removeEventListener("kitchen-family-change", syncFamily);
     };
   }, [refreshOrders]);
 
   /** 新增订单后返回数据库记录；Realtime 会负责刷新本地列表。 */
   const createOrder = useCallback(async (order: OrderInsert) => {
+    const { familyId } = familyStateRef.current;
+    if (!familyId) throw new Error("请先加入家庭");
     setError(null);
     try {
-      const createdOrder = await createOrderApi(order);
+      const createdOrder = await createOrderApi({ ...order, family_id: familyId });
       await refreshOrders();
       return createdOrder;
     } catch (caughtError) {
@@ -75,9 +109,11 @@ export function useOrders() {
 
   /** 删除指定订单。 */
   const removeOrder = useCallback(async (id: string) => {
+    const { familyId } = familyStateRef.current;
+    if (!familyId) throw new Error("请先加入家庭");
     setError(null);
     try {
-      await deleteOrderApi(id);
+      await deleteOrderApi(familyId, id);
       await refreshOrders();
     } catch (caughtError) {
       const nextError = caughtError instanceof Error ? caughtError : new Error("删除订单失败");
@@ -88,9 +124,11 @@ export function useOrders() {
 
   /** 清空订单表。 */
   const clearOrders = useCallback(async () => {
+    const { familyId } = familyStateRef.current;
+    if (!familyId) throw new Error("请先加入家庭");
     setError(null);
     try {
-      await clearOrdersApi();
+      await clearOrdersApi(familyId);
       await refreshOrders();
     } catch (caughtError) {
       const nextError = caughtError instanceof Error ? caughtError : new Error("清空订单失败");
@@ -99,5 +137,5 @@ export function useOrders() {
     }
   }, [refreshOrders]);
 
-  return { orders, isLoading, error, refreshOrders, createOrder, removeOrder, clearOrders };
+  return { orders, isLoading, error, refreshOrders, createOrder, removeOrder, clearOrders, familySnapshot };
 }
