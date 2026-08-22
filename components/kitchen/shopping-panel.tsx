@@ -3,46 +3,21 @@
 import React from "react";
 import { ArrowRight, Check, Layers, PlusCircle, ShoppingBag, Soup, Trash2, UtensilsCrossed } from "lucide-react";
 import type { ExtraShoppingItem, MergedShoppingItem } from "@/lib/kitchen/types";
+import { formatSmartQuantity, formatShoppingQuantity } from "@/lib/kitchen/ingredient-units";
 
-// 智能量化换算函数
-function formatSmartQuantity(item: MergedShoppingItem) {
-  const total = item.totalQuantity;
-  const unit = item.unit;
-  const name = item.name;
-
-  // 读取菜谱数据中原有的手写备注（如：“约2根”）
-  const sourceNote = item.sources.find((s) => s.note?.trim())?.note?.trim();
-
-  if (total !== null && total > 0) {
-    let approxStr = "";
-
-    // 根据生活经验进行常用单位换算
-    if (unit === "克" || unit === "g") {
-      if (total >= 500 && total % 500 === 0) {
-        approxStr = `${total / 500}斤`;
-      } else if (name.includes("胡萝卜")) {
-        approxStr = `约${Math.max(1, Math.round(total / 75))}根`;
-      } else if (name.includes("大蒜") || name.includes("蒜")) {
-        approxStr = `约${Math.max(1, Math.round(total / 15))}头/瓣`;
-      } else if (name.includes("小葱") || name.includes("葱")) {
-        approxStr = `约${Math.max(1, Math.round(total / 5))}根`;
-      } else if (name.includes("土豆")) {
-        approxStr = `约${Math.max(1, Math.round(total / 150))}个`;
-      } else if (name.includes("青椒") || name.includes("辣椒")) {
-        approxStr = `约${Math.max(1, Math.round(total / 40))}个`;
-      } else if (name.includes("鸡蛋")) {
-        approxStr = `约${Math.max(1, Math.round(total / 50))}个`;
-      }
-    }
-
-    const detailNote = approxStr || sourceNote;
-    const baseStr = `${total}克`;
-
-    return detailNote ? `${baseStr} （${detailNote}）` : baseStr;
-  }
-
-  return sourceNote ? `${unit} （${sourceNote}）` : unit;
+// 向后兼容：调用新的换算表函数。保留此函数是为了避免未来其他引用处改坏。
+// 注意：购物清单这里**不传入 sources 的做法备注（切碎 / 去籽切丝 …）**，避免括号被做菜提示占满；
+// 括号里只保留通俗买菜叫法（约X个 / 约X块 / 约X根 / 1斤）。
+function formatSmartQuantityLegacy(item: MergedShoppingItem): string {
+  return formatSmartQuantity({
+    name: item.name,
+    totalQuantity: item.totalQuantity,
+    unit: item.unit,
+    sources: undefined,
+  });
 }
+// 保持导出（未使用）避免潜在 lint 警告：当前 ShoppingPanel 用的是下方的 formatSmartQuantityLegacy。
+void formatShoppingQuantity;
 
 /** 采购清单面板，数据逻辑与 UI 完整对齐 */
 export function ShoppingPanel({
@@ -183,7 +158,7 @@ export function ShoppingPanel({
                             checked ? "text-emerald-700/60" : "text-emerald-700"
                           }`}
                         >
-                          {formatSmartQuantity(item)}
+                          {formatSmartQuantityLegacy(item)}
                         </span>
                       </div>
 

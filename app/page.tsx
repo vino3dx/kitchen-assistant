@@ -77,8 +77,12 @@ export default function HomePage() {
       setFamilyCode(created.family_code);
       setFamilyMessage(`已创建新家庭，家庭码: ${created.family_code}`);
       toast("创建家庭成功");
-    } catch {
-      toast("创建家庭失败，请重试");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "创建家庭失败，请重试";
+      // eslint-disable-next-line no-console
+      console.error("[createFamily] 创建失败:", err);
+      setFamilyMessage(detail);
+      toast(detail);
     }
   }
 
@@ -98,8 +102,12 @@ export default function HomePage() {
       setFamilyCode(matched.family_code);
       setFamilyMessage(`已加入家庭，家庭码: ${matched.family_code}`);
       toast("加入家庭成功");
-    } catch {
-      toast("加入家庭失败，请重试");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "加入家庭失败，请重试";
+      // eslint-disable-next-line no-console
+      console.error("[joinFamily] 加入失败:", err);
+      setFamilyMessage(detail);
+      toast(detail);
     }
   }
 
@@ -143,6 +151,17 @@ export default function HomePage() {
       "玉米淀粉", "生粉", "淀粉", "面粉"
     ];
 
+    // 把 string / 数字 / null / "2" / "2.5" 这类混合口径统一成 number|null
+    const parseQty = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      if (typeof v === "string") {
+        const n = Number(v.trim());
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    };
+
     for (const { recipe, orderedBy } of orderedRecipes) {
       for (const ingredient of recipe.ingredients) {
         // 清理食材名称（剔除括号里的切法，如“大蒜 (切蒜末)” -> “大蒜”）
@@ -167,10 +186,11 @@ export default function HomePage() {
           sources: []
         };
 
-        if (typeof ingredient.quantity === "number") {
-          item.totalQuantity = (item.totalQuantity ?? 0) + ingredient.quantity;
+        const qtyNum = parseQty(ingredient.quantity);
+        if (qtyNum !== null) {
+          item.totalQuantity = (item.totalQuantity ?? 0) + qtyNum;
         }
-        item.isApproximate ||= typeof ingredient.quantity !== "number" || unit === "适量";
+        item.isApproximate ||= qtyNum === null || unit === "适量";
 
         item.sources.push(
           ...orderedBy.map((userName) => ({
