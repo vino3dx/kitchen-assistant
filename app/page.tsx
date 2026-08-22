@@ -135,16 +135,33 @@ export default function HomePage() {
   const activeRecipe = orderedRecipes.find(({ recipe }) => recipe.id === selectedId)?.recipe ?? null;
 
   async function toggleRecipe(recipe: Recipe) {
+    if (!familyId) {
+      toast("请先加入家庭");
+      return;
+    }
     try {
       const order = ordersState.orders.find((item) => item.recipe_id === recipe.id && item.user_name === currentMember);
-      if (order) { await ordersState.removeOrder(order.id); toast(`已从今日菜单移除「${recipe.name}」`); }
-      else { await ordersState.createOrder({ recipe_id: recipe.id, user_name: currentMember }); toast(`已将「${recipe.name}」加入今日菜单！`); }
-    } catch { toast("操作失败，请重试"); }
+      if (order) {
+        await ordersState.removeOrder(order.id);
+        toast(`已从今日菜单移除「${recipe.name}」`);
+      } else {
+        await ordersState.createOrder({
+          family_id: familyId,
+          recipe_id: recipe.id,
+          user_name: currentMember,
+        });
+        toast(`已将「${recipe.name}」加入今日菜单！`);
+      }
+    } catch {
+      toast("操作失败，请重试");
+    }
   }
+
   async function clearOrders() {
     if (!window.confirm("确定要清空今日的所有点菜吗？")) return;
     try { await ordersState.clearOrders(); setCompletedDishes({}); setCompletedSteps({}); setCheckedIngredients({}); toast("已重置今日菜单"); } catch { toast("清空菜单失败，请重试"); }
   }
+
   async function addExtraItem(event: React.FormEvent) {
     event.preventDefault();
     if (!extraItemName.trim()) return;
@@ -192,7 +209,16 @@ export default function HomePage() {
   </div>;
 }
 
-function stats<T>(items: T[], completed: (item: T) => boolean = (item) => "checked" in (item as object) && Boolean((item as { checked: boolean }).checked)) {
-  const total = items.length, done = items.filter(completed).length;
-  return { total, completed: done, percent: total ? Math.round((done / total) * 100) : 0 };
+function stats<T>(
+  items: T[] = [],
+  completed: (item: T) => boolean = (item) => Boolean(item && typeof item === "object" && "checked" in item && (item as { checked: boolean }).checked)
+) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const total = safeItems.length;
+  const done = safeItems.filter((item) => Boolean(item && completed(item))).length;
+  return {
+    total,
+    completed: done,
+    percent: total > 0 ? Math.round((done / total) * 100) : 0,
+  };
 }
