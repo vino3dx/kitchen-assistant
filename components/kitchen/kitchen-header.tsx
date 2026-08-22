@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { BookOpen, ChefHat, Copy, RotateCcw, ShoppingCart, UtensilsCrossed } from "lucide-react";
 
 export type KitchenTab = "order" | "shopping" | "cook";
@@ -27,7 +28,12 @@ export function KitchenHeader({
   onCopyFamilyCode,
   onSwitchFamily,
 }: KitchenHeaderProps) {
-  // 选项卡通用样式生成函数
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const tabClass = (tab: KitchenTab, active: string) =>
     `flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
       activeTab === tab ? active : "text-stone-600 hover:text-stone-900"
@@ -35,45 +41,33 @@ export function KitchenHeader({
 
   return (
     <header id="kitchen-header" className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
-      {/* 顶部主导航栏 */}
       <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-        {/* 左侧应用 Logo 与家庭状态信息 */}
         <div className="flex items-center gap-2.5">
-          {/* Logo 图标 */}
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-xs">
             <ChefHat className="w-6 h-6" />
           </div>
-
-          {/* 应用标题与描述 */}
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold tracking-tight text-stone-900">厨房助手</h1>
-            </div>
+            <h1 className="text-lg font-bold tracking-tight text-stone-900">厨房助手</h1>
             <p className="text-xs text-stone-500">点菜 → 智能买菜清单 → 烹饪指南</p>
-
-            {/* 家庭码展示 */}
             <div className="mt-1.5 inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs text-stone-700">
               <span className="font-semibold text-stone-900">
-                {familyCode ? `家庭码: ${familyCode}` : "未加入家庭"}
+                {mounted && familyCode ? `家庭码: ${familyCode}` : ""}
               </span>
             </div>
           </div>
         </div>
 
-        {/* 右侧快捷操作按钮组 */}
         <div className="flex items-center gap-2">
-          {/* 复制家庭码 */}
           <button
             type="button"
             onClick={onCopyFamilyCode}
-            disabled={!familyCode}
+            disabled={!mounted || !familyCode}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Copy className="w-3.5 h-3.5" />
             <span>复制家庭码</span>
           </button>
 
-          {/* 切换家庭 */}
           <button
             type="button"
             onClick={onSwitchFamily}
@@ -83,7 +77,6 @@ export function KitchenHeader({
             <span>切换家庭</span>
           </button>
 
-          {/* 跳转菜谱库管理 */}
           <Link
             id="btn-nav-admin"
             href="/admin"
@@ -95,10 +88,8 @@ export function KitchenHeader({
         </div>
       </div>
 
-      {/* 底部 3 阶段导航选项卡 */}
       <div className="max-w-4xl mx-auto px-4 pt-1 pb-2">
         <nav className="grid grid-cols-3 p-1 bg-stone-100/90 rounded-xl border border-stone-200 gap-1">
-          {/* 阶段 1：点菜 */}
           <button
             id="tab-btn-order"
             onClick={() => onTabChange("order")}
@@ -113,7 +104,6 @@ export function KitchenHeader({
             )}
           </button>
 
-          {/* 阶段 2：买菜 */}
           <button
             id="tab-btn-shopping"
             onClick={() => onTabChange("shopping")}
@@ -132,7 +122,6 @@ export function KitchenHeader({
             )}
           </button>
 
-          {/* 阶段 3：做菜 */}
           <button
             id="tab-btn-cook"
             onClick={() => onTabChange("cook")}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FolderPlus, LogIn } from "lucide-react";
 import { CookingPanel } from "@/components/kitchen/cooking-panel";
 import { KitchenHeader, type KitchenTab } from "@/components/kitchen/kitchen-header";
@@ -32,8 +32,9 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<KitchenTab>("order");
   const [currentMember, setCurrentMember] = useState("爸爸");
   const [familyCodeInput, setFamilyCodeInput] = useState("");
-  const [familyId, setFamilyId] = useState<string | null>(() => getStoredFamily().familyId);
-  const [familyCode, setFamilyCode] = useState<string | null>(() => getStoredFamily().familyCode);
+  const [familyId, setFamilyId] = useState<string | null>(null);
+  const [familyCode, setFamilyCode] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [familyMessage, setFamilyMessage] = useState<string | null>(null);
   const [customNameInput, setCustomNameInput] = useState("");
   const [showCustomName, setShowCustomName] = useState(false);
@@ -45,13 +46,27 @@ export default function HomePage() {
   const [extraItemQuantity, setExtraItemQuantity] = useState("");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
+  // 客户端挂载后再读取家庭信息
+  // 避免服务端和浏览器首次渲染结果不一致
+  useEffect(() => {
+    const stored = getStoredFamily();
+
+    setFamilyId(stored.familyId);
+    setFamilyCode(stored.familyCode);
+
+    setMounted(true);
+  }, []);
   const recipesState = useRecipes();
+
+  console.log("recipes:", recipesState.recipes);
+  console.log("loading:", recipesState.isLoading);
+  console.log("count:", recipesState.recipes.length);
   const ordersState = useOrders();
   const shoppingState = useShopping();
 
   const toast = (message: string) => {
     setToastMsg(message);
-    window.setTimeout(() => setToastMsg(null), 2500);
+    setTimeout(() => setToastMsg(null), 2500);
   };
 
   async function createFamily() {
@@ -116,18 +131,66 @@ export default function HomePage() {
     return result;
   }, [ordersState.orders, recipesState.recipes]);
   const orderedRecipes = useMemo(() => [...orderedByRecipe.values()], [orderedByRecipe]);
+
   const mergedShoppingList = useMemo(() => {
     const items = new Map<string, MergedShoppingItem>();
-    for (const { recipe, orderedBy } of orderedRecipes) for (const ingredient of recipe.ingredients) {
-      const name = ingredient.name.trim(), unit = (ingredient.unit || "适量").trim(), key = `${name}_${unit}`;
-      const item = items.get(key) ?? { id: `item-${name}-${unit}`, name, unit, totalQuantity: null, isApproximate: false, checked: !!checkedIngredients[key], sources: [] };
-      item.totalQuantity = typeof ingredient.quantity === "number" ? (item.totalQuantity ?? 0) + ingredient.quantity : item.totalQuantity;
-      item.isApproximate ||= typeof ingredient.quantity !== "number" || unit === "适量";
-      item.sources.push(...orderedBy.map((userName) => ({ dishName: recipe.name, userName, quantity: ingredient.quantity, unit, note: ingredient.note })));
-      items.set(key, item);
+
+    // 1. 常用调料/常备食材关键词黑名单
+    const stapleIngredients = [
+      "白糖", "糖", "生抽", "老抽", "酱油", "食用盐", "盐", 
+      "食用油", "油", "料酒", "香油", "醋", "味精", "鸡精", 
+      "胡椒粉", "花椒粉", "蚝油", "十三香",
+      "玉米淀粉", "生粉", "淀粉", "面粉"
+    ];
+
+    for (const { recipe, orderedBy } of orderedRecipes) {
+      for (const ingredient of recipe.ingredients) {
+        // 清理食材名称（剔除括号里的切法，如“大蒜 (切蒜末)” -> “大蒜”）
+        const cleanName = ingredient.name.replace(/\(.*\)|（.*）/g, "").trim();
+
+        // 过滤逻辑：如果匹配常备调料黑名单，直接跳过
+        if (stapleIngredients.some((staple) => cleanName.includes(staple))) {
+          continue;
+        }
+
+        const unit = (ingredient.unit || "适量").trim();
+        // 使用纯名称作为 Key，确保同一种食材（如大蒜）能合并到一起
+        const key = cleanName;
+
+        const item = items.get(key) ?? {
+          id: `item-${cleanName}`,
+          name: cleanName,
+          unit: unit,
+          totalQuantity: null,
+          isApproximate: false,
+          checked: !!checkedIngredients[key],
+          sources: []
+        };
+
+        if (typeof ingredient.quantity === "number") {
+          item.totalQuantity = (item.totalQuantity ?? 0) + ingredient.quantity;
+        }
+        item.isApproximate ||= typeof ingredient.quantity !== "number" || unit === "适量";
+
+        item.sources.push(
+          ...orderedBy.map((userName) => ({
+            dishName: recipe.name,
+            userName,
+            quantity: ingredient.quantity,
+            unit: unit,
+            note: ingredient.note
+          }))
+        );
+
+        items.set(key, item);
+      }
     }
-    return [...items.values()].sort((a, b) => Number(a.checked) - Number(b.checked) || a.name.localeCompare(b.name, "zh-CN"));
+
+    return [...items.values()].sort(
+      (a, b) => Number(a.checked) - Number(b.checked) || a.name.localeCompare(b.name, "zh-CN")
+    );
   }, [checkedIngredients, orderedRecipes]);
+
   const extraShoppingItems = useMemo(() => shoppingState.shoppingItems.filter((item): item is ExtraShoppingItem => item.type === "extra") as ExtraShoppingItem[], [shoppingState.shoppingItems]);
   const shoppingStats = useMemo(() => stats([...mergedShoppingList, ...extraShoppingItems]), [mergedShoppingList, extraShoppingItems]);
   const cookingStats = useMemo(() => stats(orderedRecipes, (item) => completedDishes[item.recipe.id]), [completedDishes, orderedRecipes]);
@@ -174,7 +237,7 @@ export default function HomePage() {
     <Toast message={toastMsg} />
     <KitchenHeader activeTab={activeTab} onTabChange={setActiveTab} orderCount={orderedRecipes.length} shopping={shoppingStats} cooking={cookingStats} familyCode={familyCode} onCopyFamilyCode={copyFamilyCode} onSwitchFamily={switchFamily} />
     <main className="max-w-4xl mx-auto px-4 py-5">
-      {!familyId ? <div className="mx-auto max-w-2xl rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
+      {!mounted || !familyId ? <div className="mx-auto max-w-2xl rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
         <div className="mb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-600">家庭隔离</p>
           <h2 className="mt-2 text-2xl font-bold text-stone-900">先创建或加入一个家庭</h2>
